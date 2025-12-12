@@ -1,0 +1,307 @@
+import React, { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Play, Pause, RotateCcw, TrendingUp, DollarSign, Activity } from 'lucide-react';
+
+const AlgoTradingDashboard = () => {
+  const [isRunning, setIsRunning] = useState(false);
+  const [balance, setBalance] = useState(10000);
+  const [position, setPosition] = useState(0);
+  const [trades, setTrades] = useState([]);
+  const [priceData, setPriceData] = useState([]);
+  const [currentPrice, setCurrentPrice] = useState(100);
+  const [shortMA, setShortMA] = useState(5);
+  const [longMA, setLongMA] = useState(20);
+  const [dayCounter, setDayCounter] = useState(0);
+
+  // Initialize price data
+  useEffect(() => {
+    const initialData = [];
+    let price = 100;
+    for (let i = 0; i < 50; i++) {
+      price += (Math.random() - 0.5) * 2;
+      initialData.push({
+        day: i,
+        price: parseFloat(price.toFixed(2)),
+        shortMA: null,
+        longMA: null
+      });
+    }
+    setPriceData(initialData);
+    setCurrentPrice(price);
+    setDayCounter(50);
+  }, []);
+
+  // Calculate moving averages
+  const calculateMA = (data, period) => {
+    if (data.length < period) return null;
+    const sum = data.slice(-period).reduce((acc, val) => acc + val.price, 0);
+    return sum / period;
+  };
+
+  // Trading logic
+  const executeTradingLogic = () => {
+    if (priceData.length < longMA) return;
+
+    const shortMAValue = calculateMA(priceData, shortMA);
+    const longMAValue = calculateMA(priceData, longMA);
+
+    if (!shortMAValue || !longMAValue) return;
+
+    // Buy signal: short MA crosses above long MA
+    if (shortMAValue > longMAValue && position === 0) {
+      const shares = Math.floor(balance / currentPrice);
+      if (shares > 0) {
+        setPosition(shares);
+        setBalance(prev => prev - (shares * currentPrice));
+        setTrades(prev => [...prev, {
+          day: dayCounter,
+          type: 'BUY',
+          price: currentPrice,
+          shares: shares,
+          balance: balance - (shares * currentPrice)
+        }]);
+      }
+    }
+    // Sell signal: short MA crosses below long MA
+    else if (shortMAValue < longMAValue && position > 0) {
+      const saleValue = position * currentPrice;
+      setBalance(prev => prev + saleValue);
+      setTrades(prev => [...prev, {
+        day: dayCounter,
+        type: 'SELL',
+        price: currentPrice,
+        shares: position,
+        balance: balance + saleValue
+      }]);
+      setPosition(0);
+    }
+  };
+
+  // Simulation loop
+  useEffect(() => {
+    if (!isRunning) return;
+
+    const interval = setInterval(() => {
+      // Generate new price
+      const newPrice = currentPrice + (Math.random() - 0.5) * 3;
+      setCurrentPrice(newPrice);
+
+      // Add to price data
+      const newDataPoint = {
+        day: dayCounter,
+        price: parseFloat(newPrice.toFixed(2)),
+        shortMA: calculateMA([...priceData, { price: newPrice }], shortMA),
+        longMA: calculateMA([...priceData, { price: newPrice }], longMA)
+      };
+
+      setPriceData(prev => [...prev.slice(-100), newDataPoint]);
+      setDayCounter(prev => prev + 1);
+
+      // Execute trading logic on next tick
+      setTimeout(() => executeTradingLogic(), 50);
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [isRunning, priceData, currentPrice, dayCounter, position, balance]);
+
+  const reset = () => {
+    setIsRunning(false);
+    setBalance(10000);
+    setPosition(0);
+    setTrades([]);
+    setDayCounter(0);
+    const initialData = [];
+    let price = 100;
+    for (let i = 0; i < 50; i++) {
+      price += (Math.random() - 0.5) * 2;
+      initialData.push({
+        day: i,
+        price: parseFloat(price.toFixed(2)),
+        shortMA: null,
+        longMA: null
+      });
+    }
+    setPriceData(initialData);
+    setCurrentPrice(price);
+  };
+
+  const totalValue = balance + (position * currentPrice);
+  const profitLoss = totalValue - 10000;
+  const profitLossPercent = ((profitLoss / 10000) * 100).toFixed(2);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <h1 className="text-4xl font-bold text-white">Algorithmic Trading Simulator</h1>
+          <p className="text-blue-200">Moving Average Crossover Strategy</p>
+        </div>
+
+        {/* Controls */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+          <div className="flex flex-wrap gap-4 items-center justify-between">
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsRunning(!isRunning)}
+                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
+                  isRunning 
+                    ? 'bg-red-500 hover:bg-red-600 text-white' 
+                    : 'bg-green-500 hover:bg-green-600 text-white'
+                }`}
+              >
+                {isRunning ? <Pause size={20} /> : <Play size={20} />}
+                {isRunning ? 'Pause' : 'Start'}
+              </button>
+              <button
+                onClick={reset}
+                className="flex items-center gap-2 px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold transition-all"
+              >
+                <RotateCcw size={20} />
+                Reset
+              </button>
+            </div>
+            
+            <div className="flex gap-4 items-center text-white">
+              <div>
+                <label className="text-sm text-blue-200">Short MA:</label>
+                <input
+                  type="number"
+                  value={shortMA}
+                  onChange={(e) => setShortMA(parseInt(e.target.value))}
+                  className="ml-2 w-16 px-2 py-1 bg-white/20 rounded border border-white/30"
+                  min="2"
+                  max="50"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-blue-200">Long MA:</label>
+                <input
+                  type="number"
+                  value={longMA}
+                  onChange={(e) => setLongMA(parseInt(e.target.value))}
+                  className="ml-2 w-16 px-2 py-1 bg-white/20 rounded border border-white/30"
+                  min="2"
+                  max="100"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+            <div className="flex items-center gap-3 mb-2">
+              <DollarSign className="text-green-400" size={24} />
+              <span className="text-blue-200 text-sm">Cash Balance</span>
+            </div>
+            <p className="text-3xl font-bold text-white">${balance.toFixed(2)}</p>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+            <div className="flex items-center gap-3 mb-2">
+              <Activity className="text-blue-400" size={24} />
+              <span className="text-blue-200 text-sm">Position</span>
+            </div>
+            <p className="text-3xl font-bold text-white">{position} shares</p>
+            <p className="text-sm text-blue-200">${(position * currentPrice).toFixed(2)}</p>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+            <div className="flex items-center gap-3 mb-2">
+              <TrendingUp className="text-purple-400" size={24} />
+              <span className="text-blue-200 text-sm">Total Value</span>
+            </div>
+            <p className="text-3xl font-bold text-white">${totalValue.toFixed(2)}</p>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+            <div className="flex items-center gap-3 mb-2">
+              <DollarSign className={profitLoss >= 0 ? "text-green-400" : "text-red-400"} size={24} />
+              <span className="text-blue-200 text-sm">P&L</span>
+            </div>
+            <p className={`text-3xl font-bold ${profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {profitLoss >= 0 ? '+' : ''}{profitLoss.toFixed(2)}
+            </p>
+            <p className={`text-sm ${profitLoss >= 0 ? 'text-green-300' : 'text-red-300'}`}>
+              {profitLoss >= 0 ? '+' : ''}{profitLossPercent}%
+            </p>
+          </div>
+        </div>
+
+        {/* Chart */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+          <h2 className="text-xl font-bold text-white mb-4">Price Chart with Moving Averages</h2>
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={priceData.slice(-50)}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+              <XAxis dataKey="day" stroke="#93c5fd" />
+              <YAxis stroke="#93c5fd" />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1e293b', 
+                  border: '1px solid #334155',
+                  borderRadius: '8px'
+                }}
+              />
+              <Legend />
+              <Line type="monotone" dataKey="price" stroke="#60a5fa" strokeWidth={2} dot={false} name="Price" />
+              <Line type="monotone" dataKey="shortMA" stroke="#34d399" strokeWidth={2} dot={false} name={`MA ${shortMA}`} />
+              <Line type="monotone" dataKey="longMA" stroke="#f87171" strokeWidth={2} dot={false} name={`MA ${longMA}`} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Recent Trades */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+          <h2 className="text-xl font-bold text-white mb-4">Recent Trades</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-white">
+              <thead className="border-b border-white/20">
+                <tr>
+                  <th className="pb-3 text-blue-200">Day</th>
+                  <th className="pb-3 text-blue-200">Type</th>
+                  <th className="pb-3 text-blue-200">Price</th>
+                  <th className="pb-3 text-blue-200">Shares</th>
+                  <th className="pb-3 text-blue-200">Balance After</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trades.slice(-10).reverse().map((trade, idx) => (
+                  <tr key={idx} className="border-b border-white/10">
+                    <td className="py-3">{trade.day}</td>
+                    <td className={`py-3 font-semibold ${trade.type === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>
+                      {trade.type}
+                    </td>
+                    <td className="py-3">${trade.price.toFixed(2)}</td>
+                    <td className="py-3">{trade.shares}</td>
+                    <td className="py-3">${trade.balance.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {trades.length === 0 && (
+              <p className="text-center text-blue-200 py-8">No trades yet. Start the simulation!</p>
+            )}
+          </div>
+        </div>
+
+        {/* Strategy Explanation */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+          <h2 className="text-xl font-bold text-white mb-3">How It Works</h2>
+          <div className="text-blue-100 space-y-2">
+            <p><strong className="text-white">Strategy:</strong> Moving Average Crossover</p>
+            <p><strong className="text-white">Buy Signal:</strong> When the short-term MA crosses above the long-term MA</p>
+            <p><strong className="text-white">Sell Signal:</strong> When the short-term MA crosses below the long-term MA</p>
+            <p className="text-sm text-blue-200 mt-4">
+              This is a simulated environment with randomly generated prices. Adjust the MA periods to see how different parameters affect performance!
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AlgoTradingDashboard;
